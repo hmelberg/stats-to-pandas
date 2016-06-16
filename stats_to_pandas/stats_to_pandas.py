@@ -8,6 +8,7 @@
 # Hans Olav Melberg, 9. June, 2016
 
 #%% Required modules
+from __future__ import print_function
 
 import pandas as pd
 import requests
@@ -16,7 +17,6 @@ from pyjstat import pyjstat
 from collections import OrderedDict
 from ipywidgets import widgets
 from IPython.display import display
-from __future__ import print_function
 # todo: consider using jsonstat instead of pyjstat
 
 
