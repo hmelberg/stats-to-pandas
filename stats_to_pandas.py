@@ -46,7 +46,7 @@ sources = ['Statistics_Norway']
 
 def search(phrase, 
            language = 'en', 
-           base_url = http://data.ssb.no/api/v0):
+           base_url = 'http://data.ssb.no/api/v0'):
     """
         Search for tables that contain the phrase in Statistics Norway.
         Returns a pandas dataframe with the results.
@@ -128,7 +128,7 @@ def get_variables(
         table_id = None,
         source = None, 
         language = 'en',
-        base_url = http://data.ssb.no/api/v0,
+        base_url = 'http://data.ssb.no/api/v0',
         full_url = None):
     """
         Returns a list. 
@@ -171,7 +171,10 @@ def get_variables(
 
 #%%
 
-def select(table_id = None, language = 'en', base_url = http://data.ssb.no/api/v0, full_url = None):
+def select(table_id = None, 
+           language = 'en', 
+           base_url = 'http://data.ssb.no/api/v0', 
+           full_url = None):
     """
     Selects a table based on the table_id and returns a widget container 
     in which the user can select the set of variables and values to be 
@@ -266,7 +269,9 @@ def select(table_id = None, language = 'en', base_url = http://data.ssb.no/api/v
 
 
 #%% 
-def get_json(box=None, out = 'dict', language = 'en'):
+def get_json(box=None, 
+             out = 'dict', 
+             language = 'en'):
     """
     Takes a widget container as input (where the user has selected varables) 
     and returns a json dictionary or string that will fetch these variables. 
@@ -366,7 +371,7 @@ def read_box(from_box):
 def read_with_json(table_id = None, 
               query = None, 
               language = 'en', 
-              base_url = http://data.ssb.no/api/v0, 
+              base_url = 'http://data.ssb.no/api/v0', 
               full_url = None):
     """
     Returns a pandas dataframe with the values for the table specified by 
@@ -417,15 +422,7 @@ def read_url(full_url = None,
     
     Note: The premade table id may be different from the normal table id.
     """
-    
-    if full_url is None:
-        full_url = '{base_url}/{premade_id}.{table_format}?lang={language}'.format(
-                base_url = base_url,
-                premade_id = str(premade_id), 
-                language = language,
-                table_format = table_format)
-    #print(full_url)
-    
+      
     if table_format == 'json':
         data = requests.get(full_url)
         df = pyjstat.from_json_stat(data.json(object_pairs_hook=OrderedDict))
@@ -443,10 +440,9 @@ def read_url(full_url = None,
 
 #%%
 
-def search_premade(
-    phrase = '*', 
-    language = 'en', 
-    url = 'http://data.ssb.no/api/v0/dataset'):
+def search_premade(phrase = '*',
+                   language = 'en',
+                   url = 'http://data.ssb.no/api/v0/dataset'):
     
     """
     Returns a pandas dataframe with the tables matching the tags specified in the search.
@@ -576,7 +572,7 @@ def full_json(table_id = None,
 
 def read_all(table_id = None, 
              language = 'en',
-             base_url = http://data.ssb.no/api/v0, 
+             base_url = 'http://data.ssb.no/api/v0', 
              full_url = None):
     """
     Returns a pandas dataframe with all values for all options 
