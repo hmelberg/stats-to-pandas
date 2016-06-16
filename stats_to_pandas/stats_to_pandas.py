@@ -20,7 +20,7 @@ from IPython.display import display
 # todo: consider using jsonstat instead of pyjstat
 
 
-#%% Defaults
+#%% Defaults (not yet implemented)
 
 # This is mainly to make the script flexible for future changes
 # Makes it easier to use the same script for sources other than Statistics Norway
@@ -28,17 +28,17 @@ from IPython.display import display
 # (note to self: is the extra complexity worth it? 
 # more complex since functions now require defaults to be used easily)
 
-Statistics_Norway = {'base_url' : ['http://data.ssb.no/api/v0'], 
-                     'language' : ['en', 'no'], 
-                     'api_key' : [None]}
+#Statistics_Norway = {'base_url' : ['http://data.ssb.no/api/v0'], 
+#                     'language' : ['en', 'no'], 
+#                     'api_key' : [None]}
 
 # Add more sources here Statistics_Sweden = {...} etc
 
 # set a default
-default = Statistics_Norway
+#default = Statistics_Norway
 
 # make a list of the different sources
-sources = ['Statistics_Norway']
+#sources = ['Statistics_Norway']
 
 
 
