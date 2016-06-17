@@ -15,8 +15,8 @@ pip install stats_to_pandas
 
 #####0. Import package
 
-    from stats_to_pandas.stats_to_pandas import *
-    # Alternative: import stats_to_pandas.stats_to_pandas as stp
+    Alternative 1: from stats_to_pandas import *
+    Alternative 2: import stats_to_pandas as stp
     
 #####1. Search for tables based on keywords
 
