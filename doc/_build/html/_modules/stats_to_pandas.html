@@ -1,0 +1,695 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>stats_to_pandas &mdash; stats_to_pandas 0.0.7 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.0.7',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="stats_to_pandas 0.0.7 documentation" href="../index.html" />
+    <link rel="up" title="Module code" href="index.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for stats_to_pandas</h1><div class="highlight"><pre>
+<span></span><span class="c1"># coding: utf-8</span>
+
+<span class="c1"># # stats-to-pandas</span>
+
+<span class="c1"># A tool to make it easier to download data to a pandas dataframe from Statistics Norway (and other agencies) using json-stat to a Pandas dataframe. </span>
+
+<span class="c1"># Hans Olav Melberg, 9. June, 2016</span>
+
+<span class="c1">#%% Required modules</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">print_function</span>
+
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="kn">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="kn">import</span> <span class="nn">ast</span>
+<span class="kn">from</span> <span class="nn">pyjstat</span> <span class="kn">import</span> <span class="n">pyjstat</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">OrderedDict</span>
+<span class="kn">from</span> <span class="nn">ipywidgets</span> <span class="kn">import</span> <span class="n">widgets</span>
+<span class="kn">from</span> <span class="nn">IPython.display</span> <span class="kn">import</span> <span class="n">display</span>
+<span class="c1"># todo: consider using jsonstat instead of pyjstat</span>
+
+
+<span class="c1">#%% Defaults (not yet implemented)</span>
+
+<span class="c1"># This is mainly to make the script flexible for future changes</span>
+<span class="c1"># Makes it easier to use the same script for sources other than Statistics Norway</span>
+<span class="c1"># The user can set a different source to be the default</span>
+<span class="c1"># (note to self: is the extra complexity worth it? </span>
+<span class="c1"># more complex since functions now require defaults to be used easily)</span>
+
+<span class="c1">#Statistics_Norway = {&#39;base_url&#39; : [&#39;http://data.ssb.no/api/v0&#39;], </span>
+<span class="c1">#                     &#39;language&#39; : [&#39;en&#39;, &#39;no&#39;], </span>
+<span class="c1">#                     &#39;api_key&#39; : [None]}</span>
+
+<span class="c1"># Add more sources here Statistics_Sweden = {...} etc</span>
+
+<span class="c1"># set a default</span>
+<span class="c1">#default = Statistics_Norway</span>
+
+<span class="c1"># make a list of the different sources</span>
+<span class="c1">#sources = [&#39;Statistics_Norway&#39;]</span>
+
+
+
+<span class="c1">#%%</span>
+
+<span class="k">def</span> <span class="nf">search</span><span class="p">(</span><span class="n">phrase</span><span class="p">,</span> 
+<div class="viewcode-block" id="search"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.search">[docs]</a>           <span class="n">language</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span><span class="p">,</span> 
+           <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;http://data.ssb.no/api/v0&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Search for tables that contain the phrase in Statistics Norway.</span>
+<span class="sd">        Returns a pandas dataframe with the results.</span>
+<span class="sd">            </span>
+<span class="sd">        Example</span>
+<span class="sd">        -------</span>
+<span class="sd">        </span>
+<span class="sd">            df = search(&quot;income&quot;)</span>
+<span class="sd">        </span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        </span>
+<span class="sd">        phrase: string</span>
+<span class="sd">            The phrase can contain several words (space separated): </span>
+<span class="sd">                search(&quot;export Norwegian parrot&quot;)</span>
+<span class="sd">            </span>
+<span class="sd">            It also supports trucation: </span>
+<span class="sd">                search(&quot;pharma*&quot;)</span>
+<span class="sd">                </span>
+<span class="sd">            Not case sensitive.</span>
+<span class="sd">            Language sensitive (specified in the language option)</span>
+<span class="sd">            </span>
+<span class="sd">        language: string </span>
+<span class="sd">            default in Statistics Norway: &#39;en&#39; (Search for English words) </span>
+<span class="sd">            optional in Statistics Norway: &#39;no&#39; (Search for Norwegian words)</span>
+<span class="sd">                   </span>
+<span class="sd">        url: string</span>
+<span class="sd">            default in Statistics Norway: &#39;http://data.ssb.no/api/v0&#39;</span>
+<span class="sd">            different defaults can be specified</span>
+<span class="sd">       </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    
+    <span class="c1"># todo: make converter part of the default specification only for statistics norway</span>
+    <span class="n">convert</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;æ&#39;</span> <span class="p">:</span> <span class="s1">&#39;%C3%A6&#39;</span><span class="p">,</span> <span class="s1">&#39;Æ&#39;</span> <span class="p">:</span> <span class="s1">&#39;%C3%86&#39;</span><span class="p">,</span> <span class="s1">&#39;ø&#39;</span> <span class="p">:</span> <span class="s1">&#39;%C3%B8&#39;</span><span class="p">,</span> <span class="s1">&#39;Ø&#39;</span> <span class="p">:</span> <span class="s1">&#39;%C3%98&#39;</span><span class="p">,</span> 
+             <span class="s1">&#39;å&#39;</span> <span class="p">:</span> <span class="s1">&#39;%C3%A5&#39;</span><span class="p">,</span> <span class="s1">&#39;Å&#39;</span> <span class="p">:</span> <span class="s1">&#39;%C3%85&#39;</span><span class="p">,</span>
+             <span class="s1">&#39;&quot;&#39;</span> <span class="p">:</span> <span class="s1">&#39;%22&#39;</span><span class="p">,</span> <span class="s1">&#39;(&#39;</span> <span class="p">:</span> <span class="s1">&#39;%28&#39;</span><span class="p">,</span> <span class="s1">&#39;)&#39;</span> <span class="p">:</span> <span class="s1">&#39;%29&#39;</span><span class="p">,</span> <span class="s1">&#39; &#39;</span> <span class="p">:</span> <span class="s1">&#39;%20&#39;</span><span class="p">}</span>
+
+    <span class="n">search_str</span> <span class="o">=</span> <span class="s1">&#39;{base_url}/{language}/table/?query={phrase}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+        <span class="n">base_url</span> <span class="o">=</span> <span class="n">base_url</span><span class="p">,</span> 
+        <span class="n">language</span> <span class="o">=</span> <span class="n">language</span><span class="p">,</span> 
+        <span class="n">phrase</span> <span class="o">=</span> <span class="n">phrase</span><span class="p">)</span>
+    
+    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">convert</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">search_str</span> <span class="o">=</span> <span class="n">search_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+    
+    <span class="c1">#print(search_str)    </span>
+    
+    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_json</span><span class="p">(</span><span class="n">search_str</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">print</span><span class="p">(</span><span class="s2">&quot;No match&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">df</span>
+    
+    <span class="c1"># make the dataframe more readable</span>
+    <span class="c1"># (is it worth it? increases vulnerability. formats may differ and change)</span>
+    <span class="c1"># todo: make search and format conditional on the database being searched    </span>
+       
+    <span class="c1"># split the table name into table id and table text</span>
+  
+    <span class="n">df</span><span class="p">[</span><span class="s1">&#39;table_id&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;title&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">df</span><span class="p">[</span><span class="s1">&#39;table_title&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;title&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">del</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;title&#39;</span><span class="p">]</span>
+    
+    <span class="c1"># make table_id the index, visually more intuitive with id as first column</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">set_index</span><span class="p">(</span><span class="s1">&#39;table_id&#39;</span><span class="p">)</span>
+    
+    <span class="c1"># change order of columns to make it more intuitive (table_title is first) </span>
+    <span class="n">cols</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+    <span class="n">cols</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">reverse</span> <span class="o">=</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">cols</span><span class="p">[:</span><span class="o">-</span><span class="mi">2</span><span class="p">]]</span>
+
+    <span class="k">return</span> <span class="n">df</span>
+
+
+<span class="c1">#%% </span>
+
+<span class="k">def</span> <span class="nf">get_variables</span><span class="p">(</span></div>
+<div class="viewcode-block" id="get_variables"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.get_variables">[docs]</a>        <span class="n">table_id</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> 
+        <span class="n">language</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span><span class="p">,</span>
+        <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;http://data.ssb.no/api/v0&#39;</span><span class="p">,</span>
+        <span class="n">full_url</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns a list. </span>
+<span class="sd">        </span>
+<span class="sd">        Each element of the list is a dictionary that provides more </span>
+<span class="sd">        information about a variable. </span>
+<span class="sd">        </span>
+<span class="sd">        For instance, one variable may contain information about the</span>
+<span class="sd">        different years that are available.</span>
+<span class="sd">        </span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">    </span>
+<span class="sd">            table_id: string</span>
+<span class="sd">                the unique table_id number, a string including leading zeros.</span>
+<span class="sd">                                </span>
+<span class="sd">            language: string</span>
+<span class="sd">                default &#39;en&#39; (default, English) </span>
+<span class="sd">                optional: &#39;no&#39; (Norwegian)</span>
+<span class="sd">            </span>
+<span class="sd">            base_url: string</span>
+<span class="sd">                base url locating the table (not including table identifier)</span>
+<span class="sd">            </span>
+<span class="sd">            full_url: string </span>
+<span class="sd">                The full url to the table.</span>
+<span class="sd">                If full_url is specified, other paramaters are ignored.</span>
+<span class="sd">                </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="k">if</span> <span class="n">full_url</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+          <span class="n">full_url</span> <span class="o">=</span> <span class="s1">&#39;{base_url}/{language}/table/{table_id}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">base_url</span> <span class="o">=</span> <span class="n">base_url</span><span class="p">,</span> <span class="n">language</span> <span class="o">=</span> <span class="n">language</span><span class="p">,</span> <span class="n">table_id</span> <span class="o">=</span> <span class="n">table_id</span><span class="p">)</span>
+    
+    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_json</span><span class="p">(</span><span class="n">full_url</span><span class="p">)</span>
+    <span class="n">variables</span> <span class="o">=</span> <span class="p">[</span><span class="nb">dict</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="k">for</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span><span class="mi">1</span><span class="p">]]</span>
+    
+    <span class="k">return</span> <span class="n">variables</span>
+
+
+<span class="c1">#%%</span>
+
+<span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="n">table_id</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> </div>
+<div class="viewcode-block" id="select"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.select">[docs]</a>           <span class="n">language</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span><span class="p">,</span> 
+           <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;http://data.ssb.no/api/v0&#39;</span><span class="p">,</span> 
+           <span class="n">full_url</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Selects a table based on the table_id and returns a widget container </span>
+<span class="sd">    in which the user can select the set of variables and values to be </span>
+<span class="sd">    included in the final table.</span>
+<span class="sd">    </span>
+<span class="sd">    </span>
+<span class="sd">    Example</span>
+<span class="sd">    --------</span>
+<span class="sd">    box = select(table_id = &#39;10714&#39;)</span>
+<span class="sd">    </span>
+<span class="sd">    </span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------    </span>
+<span class="sd">    </span>
+<span class="sd">        table_id : string </span>
+<span class="sd">            the id of the desired table</span>
+<span class="sd">         </span>
+<span class="sd">        language: string</span>
+<span class="sd">            language for table</span>
+<span class="sd">            &#39;en&#39; (default, English) </span>
+<span class="sd">            &#39;no&#39; (Norwegian): </span>
+<span class="sd">            language for table</span>
+<span class="sd">        </span>
+<span class="sd">        base_url: string.</span>
+<span class="sd">            base url locating the table (not including table_id)</span>
+<span class="sd">        </span>
+<span class="sd">        full_url: string</span>
+<span class="sd">            the full url to the table</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+        
+    <span class="c1"># get table_id not full url was specified </span>
+    <span class="k">if</span> <span class="n">full_url</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">full_url</span> <span class="o">=</span> <span class="s1">&#39;{base_url}/{language}/table/{table_id}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">base_url</span> <span class="o">=</span> <span class="n">base_url</span><span class="p">,</span> 
+                    <span class="n">language</span> <span class="o">=</span> <span class="n">language</span><span class="p">,</span> 
+                    <span class="n">table_id</span> <span class="o">=</span> <span class="n">table_id</span><span class="p">)</span>
+        
+    <span class="n">table_info</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_json</span><span class="p">(</span><span class="n">full_url</span><span class="p">)</span>
+    <span class="n">table_title</span> <span class="o">=</span> <span class="n">table_info</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># get a list with dictionaries containing information about each variable</span>
+    <span class="n">variables</span> <span class="o">=</span> <span class="n">get_variables</span><span class="p">(</span><span class="n">table_id</span> <span class="o">=</span> <span class="n">table_id</span><span class="p">,</span> 
+                              <span class="n">language</span> <span class="o">=</span> <span class="n">language</span><span class="p">,</span>
+                              <span class="n">base_url</span> <span class="o">=</span> <span class="n">base_url</span><span class="p">,</span>
+                              <span class="n">full_url</span> <span class="o">=</span> <span class="n">full_url</span><span class="p">)</span>
+    
+    <span class="c1"># get number of variables (ok, childish approach, can be simplified!)</span>
+    <span class="n">nvars</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">variables</span><span class="p">)</span>
+    <span class="n">var_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">nvars</span><span class="p">))</span>
+    
+    <span class="c1"># a list of dictionaries of the values available for each variable</span>
+    <span class="n">option_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">OrderedDict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">variables</span><span class="p">[</span><span class="n">var</span><span class="p">][</span><span class="s1">&#39;valueTexts&#39;</span><span class="p">],</span> 
+                                   <span class="n">variables</span><span class="p">[</span><span class="n">var</span><span class="p">][</span><span class="s1">&#39;values&#39;</span><span class="p">]))</span> 
+                   <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">var_list</span><span class="p">]</span>
+    
+    <span class="c1"># create a selection widget for each variable</span>
+    <span class="c1"># todo: skip widget or make it invisible if there is only one option?</span>
+    <span class="c1"># todo: make first alternative a default selection initially for all tables?</span>
+    <span class="c1"># todo: add buttons for selecting &quot;all&quot;, &quot;latest&quot; , &quot;first&quot; and &quot;none&quot;</span>
+                         
+    <span class="n">selection_widgets</span> <span class="o">=</span> <span class="p">[</span><span class="n">widgets</span><span class="o">.</span><span class="n">widget_selection</span><span class="o">.</span><span class="n">SelectMultiple</span><span class="p">(</span>
+                            <span class="n">options</span> <span class="o">=</span> <span class="n">option_list</span><span class="p">[</span><span class="n">var</span><span class="p">],</span> 
+                            <span class="n">height</span> <span class="o">=</span> <span class="mi">400</span><span class="p">,</span> 
+                            <span class="n">width</span> <span class="o">=</span> <span class="mi">500</span><span class="p">)</span> 
+                         <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">var_list</span><span class="p">]</span>
+    
+    <span class="c1"># put all the widgets in a container</span>
+    <span class="n">variables_container</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Tab</span><span class="p">(</span><span class="n">selection_widgets</span><span class="p">)</span>
+
+    <span class="c1"># label each container with the variable label </span>
+    <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">var_list</span><span class="p">:</span>
+        <span class="n">title</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">variables</span><span class="p">[</span><span class="n">var</span><span class="p">][</span><span class="s1">&#39;text&#39;</span><span class="p">])</span>
+        <span class="n">variables_container</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="n">title</span><span class="p">)</span>
+    
+    <span class="c1"># build widgets and put in one widget container</span>
+    <span class="n">headline</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Label</span><span class="p">(</span><span class="n">value</span> <span class="o">=</span> <span class="n">table_title</span><span class="p">,</span> <span class="n">color</span> <span class="o">=</span> <span class="s1">&#39;blue&#39;</span><span class="p">)</span>
+    
+    <span class="n">endline</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Label</span><span class="p">(</span><span class="n">value</span> <span class="o">=</span> <span class="s1">&#39;&#39;&#39;Select category and click on elements </span>
+<span class="s1">        to be included in the table (CTRL-A selects &quot;all&quot;)&#39;&#39;&#39;</span><span class="p">)</span>
+    
+    <span class="n">url_text</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Label</span><span class="p">(</span><span class="n">value</span> <span class="o">=</span> <span class="n">full_url</span><span class="p">)</span>
+    
+    <span class="n">selection_container</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">VBox</span><span class="p">([</span><span class="n">headline</span><span class="p">,</span> 
+                                        <span class="n">endline</span><span class="p">,</span> 
+                                        <span class="n">variables_container</span><span class="p">,</span> 
+                                        <span class="n">url_text</span><span class="p">])</span>
+    
+    <span class="n">selection_container</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">border</span> <span class="o">=</span> <span class="s1">&#39;3px grey solid&#39;</span>
+    <span class="c1"># may include a &quot;click here when finished&quot; just to make it more intuitive?</span>
+    <span class="k">return</span> <span class="n">selection_container</span>
+
+
+
+<span class="c1">#%% </span>
+<span class="k">def</span> <span class="nf">get_json</span><span class="p">(</span><span class="n">box</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> </div>
+<div class="viewcode-block" id="get_json"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.get_json">[docs]</a>             <span class="n">out</span> <span class="o">=</span> <span class="s1">&#39;dict&#39;</span><span class="p">,</span> 
+             <span class="n">language</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Takes a widget container as input (where the user has selected varables) </span>
+<span class="sd">    and returns a json dictionary or string that will fetch these variables. </span>
+<span class="sd">    </span>
+<span class="sd">    The json follows the json-stat format.</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    </span>
+<span class="sd">    box : widget container </span>
+<span class="sd">        name of widget box with the selected variables</span>
+<span class="sd">    </span>
+<span class="sd">    out : string </span>
+<span class="sd">        default: &#39;dict&#39;, options: &#39;str&#39;</span>
+<span class="sd">        </span>
+<span class="sd">        The json can be returned as a dictionary or a string.</span>
+<span class="sd">        The final end query should use a dict, but some may find it useful to</span>
+<span class="sd">        get the string and revise it before transforming it back to a dict.</span>
+<span class="sd">    </span>
+<span class="sd">    </span>
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    </span>
+<span class="sd">    json_query = get_json(box)</span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+        
+    <span class="n">table_url</span> <span class="o">=</span> <span class="n">box</span><span class="o">.</span><span class="n">children</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">value</span>
+    <span class="n">variables</span> <span class="o">=</span> <span class="n">get_variables</span><span class="p">(</span><span class="n">full_url</span> <span class="o">=</span> <span class="n">table_url</span><span class="p">)</span>
+    <span class="n">nvars</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">box</span><span class="o">.</span><span class="n">children</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">children</span><span class="p">)</span>
+    <span class="n">var_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">nvars</span><span class="p">))</span>
+    <span class="n">query_element</span> <span class="o">=</span> <span class="p">{}</span>
+    
+    <span class="c1"># create a dict of strings, one for each variable that specifies </span>
+    <span class="c1"># the json-stat that selects the variables/values</span>
+    
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">var_list</span><span class="p">:</span>
+        <span class="n">value_list</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">box</span><span class="o">.</span><span class="n">children</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">children</span><span class="p">[</span><span class="n">x</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="p">))</span>
+        <span class="n">query_element</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;{{&quot;code&quot;: &quot;{code}&quot;, &quot;selection&quot;: {{&quot;filter&quot;: &quot;item&quot;, &quot;values&quot;: {values} }}}}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">code</span> <span class="o">=</span> <span class="n">variables</span><span class="p">[</span><span class="n">x</span><span class="p">][</span><span class="s1">&#39;code&#39;</span><span class="p">],</span> 
+            <span class="n">values</span> <span class="o">=</span> <span class="n">value_list</span><span class="p">)</span>
+        <span class="n">query_element</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="n">query_element</span><span class="p">[</span><span class="n">x</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\&#39;</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+    
+    <span class="n">all_elements</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">query_element</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+    <span class="n">all_elements</span> <span class="o">=</span> <span class="n">all_elements</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\&#39;</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+    <span class="n">query</span> <span class="o">=</span> <span class="s1">&#39;{{&quot;query&quot;: {all_elements} , &quot;response&quot;: {{&quot;format&quot;: &quot;json-stat&quot; }}}}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">all_elements</span> <span class="o">=</span> <span class="n">all_elements</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">out</span> <span class="o">==</span> <span class="s1">&#39;dict&#39;</span><span class="p">:</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    
+  
+    <span class="c1"># todo: build it as a dictionary to start with (and not a string that is made into a dict as now)</span>
+    <span class="c1"># todo: add error message if required variables are not selected</span>
+    <span class="c1"># todo: avoid repeat downloading of same information </span>
+    <span class="c1"># eg. get_variables is sometimes used three times before a table is downloaded</span>
+    
+    <span class="k">return</span> <span class="n">query</span>
+
+
+<span class="c1">#%%</span>
+
+<span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="n">json_str</span><span class="p">):</span></div>
+<div class="viewcode-block" id="to_dict"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.to_dict">[docs]</a>    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Transforms a string to a dictionary.</span>
+<span class="sd">        </span>
+<span class="sd">        Note: Will fail if string is not correctly specified.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># OK, really unnecessary func, but a concession to less experienced users</span>
+    <span class="c1"># todo: use json module instead, json.dumps()</span>
+    <span class="n">query</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span><span class="n">json_str</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">query</span>
+    
+
+<span class="c1">#%%</span>
+
+<span class="k">def</span> <span class="nf">read_box</span><span class="p">(</span><span class="n">from_box</span><span class="p">):</span></div>
+<div class="viewcode-block" id="read_box"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.read_box">[docs]</a>    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Takes a widget container as input (where the user has selected varables) </span>
+<span class="sd">    and returns a pandas dataframe with the values for the selected variables.</span>
+<span class="sd">    </span>
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    </span>
+<span class="sd">    df = read_box(box)</span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">query</span> <span class="o">=</span> <span class="n">get_json</span><span class="p">(</span><span class="n">from_box</span><span class="p">)</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="n">from_box</span><span class="o">.</span><span class="n">children</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">value</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">json</span> <span class="o">=</span> <span class="n">query</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">pyjstat</span><span class="o">.</span><span class="n">from_json_stat</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">json</span><span class="p">(</span><span class="n">object_pairs_hook</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+
+<span class="c1">#%% </span>
+
+<span class="k">def</span> <span class="nf">read_with_json</span><span class="p">(</span><span class="n">table_id</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> </div>
+<div class="viewcode-block" id="read_with_json"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.read_with_json">[docs]</a>              <span class="n">query</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> 
+              <span class="n">language</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span><span class="p">,</span> 
+              <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;http://data.ssb.no/api/v0&#39;</span><span class="p">,</span> 
+              <span class="n">full_url</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns a pandas dataframe with the values for the table specified by </span>
+<span class="sd">    table_id and an explicit json string (in json-stat format).</span>
+<span class="sd">    </span>
+<span class="sd">    Useful if </span>
+<span class="sd">        - you know exactly what you are looking for and</span>
+<span class="sd">        - can specify the json yourself (as a dictionary)</span>
+<span class="sd">        - you do not want to use the notebook/widgets/box to specify the json query</span>
+<span class="sd">        </span>
+<span class="sd">    Hints</span>
+<span class="sd">    -----</span>
+<span class="sd">        - use full_json(table_id = &#39;10714&#39;, out = &#39;string&#39;) to get a query string and edit it</span>
+<span class="sd">        - use to_dict(str) to get a dict from an edited json string</span>
+<span class="sd">            </span>
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    json_query = {&#39;response&#39;: {&#39;format&#39;: &#39;json-stat&#39;}, </span>
+<span class="sd">        &#39;query&#39;: [</span>
+<span class="sd">        {&#39;selection&#39;: {&#39;values&#39;: [&#39;0&#39;], &#39;filter&#39;: &#39;item&#39;}, &#39;code&#39;: &#39;Region&#39;}, </span>
+<span class="sd">        {&#39;selection&#39;: {&#39;values&#39;: [&#39;KufjolsIAlt&#39;], &#39;filter&#39;: &#39;item&#39;}, &#39;code&#39;: &#39;ContentsCode&#39;}, </span>
+<span class="sd">        {&#39;selection&#39;: {&#39;values&#39;: [&#39;1999&#39;, &#39;2013&#39;], &#39;filter&#39;: &#39;item&#39;}, &#39;code&#39;: &#39;Tid&#39;}]}</span>
+<span class="sd">        }</span>
+<span class="sd">    </span>
+<span class="sd">    df = read_with_json(table_id = &#39;10714&#39;, query = json_query)</span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">full_url</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        
+        <span class="n">full_url</span> <span class="o">=</span> <span class="s1">&#39;{base_url}/{language}/table/{table_id}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">base_url</span> <span class="o">=</span> <span class="n">base_url</span><span class="p">,</span> 
+            <span class="n">language</span> <span class="o">=</span> <span class="n">language</span><span class="p">,</span> 
+            <span class="n">table_id</span> <span class="o">=</span> <span class="n">table_id</span><span class="p">)</span>
+        
+    <span class="n">data</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">full_url</span><span class="p">,</span> <span class="n">json</span> <span class="o">=</span> <span class="n">query</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">pyjstat</span><span class="o">.</span><span class="n">from_json_stat</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">json</span><span class="p">(</span><span class="n">object_pairs_hook</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+
+
+<span class="c1">#%%</span>
+
+<span class="k">def</span> <span class="nf">read_url</span><span class="p">(</span><span class="n">full_url</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> </div>
+<div class="viewcode-block" id="read_url"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.read_url">[docs]</a>             <span class="n">table_format</span> <span class="o">=</span> <span class="s1">&#39;json&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns a pandas dataframe of the premade table indicated by the premade </span>
+<span class="sd">    table_id or the full_url.</span>
+<span class="sd">    </span>
+<span class="sd">    Note: The premade table id may be different from the normal table id.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+      
+    <span class="k">if</span> <span class="n">table_format</span> <span class="o">==</span> <span class="s1">&#39;json&#39;</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">full_url</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pyjstat</span><span class="o">.</span><span class="n">from_json_stat</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">json</span><span class="p">(</span><span class="n">object_pairs_hook</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">))</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        
+    <span class="k">elif</span> <span class="n">table_format</span> <span class="o">==</span> <span class="s1">&#39;csv&#39;</span><span class="p">:</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">full_url</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">print</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;Table_format is incorrectly specified. </span>
+<span class="s2">              It must be &#39;json-stat&#39; or &#39;csv&#39;&quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">return</span> <span class="n">df</span>
+
+
+
+<span class="c1">#%%</span>
+
+<span class="k">def</span> <span class="nf">search_premade</span><span class="p">(</span><span class="n">phrase</span> <span class="o">=</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span></div>
+<div class="viewcode-block" id="search_premade"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.search_premade">[docs]</a>                   <span class="n">language</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span><span class="p">,</span>
+                   <span class="n">url</span> <span class="o">=</span> <span class="s1">&#39;http://data.ssb.no/api/v0/dataset&#39;</span><span class="p">):</span>
+    
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns a pandas dataframe with the tables matching the tags specified in the search.</span>
+<span class="sd">    </span>
+<span class="sd">    Note that the function does not search in the headline of the tables, but in the tags.</span>
+<span class="sd">    </span>
+<span class="sd">    The search is exact, so it may be better to get a list of all tables </span>
+<span class="sd">    (use phrase = &#39;*&#39; or just leave it unspecified)</span>
+<span class="sd">    </span>
+<span class="sd">    The ID column contains a special table id for premade tables </span>
+<span class="sd">    (use this is when specifying the table to be downloaded)</span>
+<span class="sd">    </span>
+<span class="sd">    Example:</span>
+<span class="sd">        </span>
+<span class="sd">        tables = search_url_tables(&#39;population&#39;)</span>
+<span class="sd">    </span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="s1">&#39;{url}?lang={language}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="n">url</span><span class="p">,</span>
+        <span class="n">language</span> <span class="o">=</span> <span class="n">language</span><span class="p">)</span>
+    
+    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_html</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">df</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;ID&#39;</span><span class="p">]</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]]</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_index</span><span class="p">()</span>
+    <span class="n">phrase</span> <span class="o">=</span> <span class="n">phrase</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    
+    <span class="k">if</span> <span class="n">phrase</span> <span class="o">!=</span> <span class="s1">&#39;*&#39;</span><span class="p">:</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[(</span><span class="n">df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="n">phrase</span><span class="p">))</span> <span class="o">|</span> 
+                <span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="n">phrase</span><span class="p">))</span> <span class="p">]</span>
+    <span class="k">return</span> <span class="n">df</span>
+
+<span class="c1"># to do: merge the two search functions?</span>
+<span class="c1"># make premade an bool arg in the search. </span>
+<span class="c1"># also allow full_url</span>
+
+
+
+<span class="c1">#%%</span>
+
+<span class="k">def</span> <span class="nf">read_premade</span><span class="p">(</span><span class="n">premade_id</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> </div>
+<div class="viewcode-block" id="read_premade"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.read_premade">[docs]</a>            <span class="n">language</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span><span class="p">,</span> 
+            <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;http://data.ssb.no/api/v0/dataset&#39;</span><span class="p">,</span> 
+            <span class="n">full_url</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> 
+            <span class="n">table_format</span> <span class="o">=</span> <span class="s1">&#39;json&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns a pandas dataframe of the premade table indicated by the premade </span>
+<span class="sd">    table_id or the full_url.</span>
+<span class="sd">    </span>
+<span class="sd">    Note: The premade table id may be different from the normal table id.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="k">if</span> <span class="n">full_url</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">full_url</span> <span class="o">=</span> <span class="s1">&#39;{base_url}/{premade_id}.{table_format}?lang={language}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">base_url</span> <span class="o">=</span> <span class="n">base_url</span><span class="p">,</span>
+                <span class="n">premade_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">premade_id</span><span class="p">),</span> 
+                <span class="n">language</span> <span class="o">=</span> <span class="n">language</span><span class="p">,</span>
+                <span class="n">table_format</span> <span class="o">=</span> <span class="n">table_format</span><span class="p">)</span>
+    <span class="c1">#print(full_url)</span>
+    
+    <span class="k">if</span> <span class="n">table_format</span> <span class="o">==</span> <span class="s1">&#39;json&#39;</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">full_url</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pyjstat</span><span class="o">.</span><span class="n">from_json_stat</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">json</span><span class="p">(</span><span class="n">object_pairs_hook</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">))</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        
+    <span class="k">elif</span> <span class="n">table_format</span> <span class="o">==</span> <span class="s1">&#39;csv&#39;</span><span class="p">:</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">full_url</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">print</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;Table_format is incorrectly specified. </span>
+<span class="s2">              It must be &#39;json-stat&#39; or &#39;csv&#39;&quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">return</span> <span class="n">df</span>
+
+
+<span class="c1">#%%</span>
+
+<span class="k">def</span> <span class="nf">full_json</span><span class="p">(</span><span class="n">table_id</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> </div>
+<div class="viewcode-block" id="full_json"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.full_json">[docs]</a>              <span class="n">out</span> <span class="o">=</span> <span class="s1">&#39;dict&#39;</span><span class="p">,</span> 
+              <span class="n">language</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span><span class="p">,</span> 
+              <span class="n">full_url</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns the json query for getting all the values for all options for a table.</span>
+<span class="sd">    Useful if</span>
+<span class="sd">        - you do not want to use the widgets/notebook to build the query</span>
+<span class="sd">        - but want a starting point to revise and specify a the query instead of building it from the ground.</span>
+<span class="sd">    </span>
+<span class="sd">    Note</span>
+<span class="sd">        - The json is a dictionary. You may want to edit the content of the dictionary directly,</span>
+<span class="sd">        or make it a string, edit it as a string, and retransform it to a dictionary.</span>
+<span class="sd">        </span>
+<span class="sd">        To transform a string to a dict, use the function:</span>
+<span class="sd">        </span>
+<span class="sd">            query = to_dict(json_str)</span>
+<span class="sd">        </span>
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    </span>
+<span class="sd">    query = full_json(table_id = &#39;10714&#39;, out = &#39;string&#39;)</span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="n">variables</span> <span class="o">=</span> <span class="n">get_variables</span><span class="p">(</span><span class="n">table_id</span><span class="p">,</span> <span class="n">language</span> <span class="o">=</span> <span class="n">language</span><span class="p">,</span> <span class="n">full_url</span> <span class="o">=</span> <span class="n">full_url</span><span class="p">)</span>
+    <span class="n">nvars</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">variables</span><span class="p">)</span>
+    <span class="n">var_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">nvars</span><span class="p">))</span>
+    
+    <span class="n">query_element</span> <span class="o">=</span> <span class="p">{}</span>
+    
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">var_list</span><span class="p">:</span>
+        <span class="n">query_element</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span><span class="s1">&#39;{{&quot;code&quot;: &quot;{code}&quot;, &quot;selection&quot;: {{&quot;filter&quot;: &quot;item&quot;, &quot;values&quot;: {values} }}}}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">code</span> <span class="o">=</span> <span class="n">variables</span><span class="p">[</span><span class="n">x</span><span class="p">][</span><span class="s1">&#39;code&#39;</span><span class="p">],</span> 
+                <span class="n">values</span> <span class="o">=</span> <span class="n">variables</span><span class="p">[</span><span class="n">x</span><span class="p">][</span><span class="s1">&#39;values&#39;</span><span class="p">])</span> 
+        <span class="n">query_element</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="n">query_element</span><span class="p">[</span><span class="n">x</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\&#39;</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+    <span class="n">all_elements</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">query_element</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+    <span class="n">all_elements</span> <span class="o">=</span> <span class="n">all_elements</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\&#39;</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    
+    <span class="n">query</span> <span class="o">=</span> <span class="s1">&#39;{{&quot;query&quot;: {all_elements} , &quot;response&quot;: {{&quot;format&quot;: &quot;json-stat&quot; }}}}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">all_elements</span> <span class="o">=</span> <span class="n">all_elements</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">out</span> <span class="o">==</span> <span class="s1">&#39;dict&#39;</span><span class="p">:</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">query</span>
+
+
+<span class="c1">#%%</span>
+
+<span class="k">def</span> <span class="nf">read_all</span><span class="p">(</span><span class="n">table_id</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> </div>
+<div class="viewcode-block" id="read_all"><a class="viewcode-back" href="../stats_to_pandas.html#stats_to_pandas.read_all">[docs]</a>             <span class="n">language</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span><span class="p">,</span>
+             <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;http://data.ssb.no/api/v0&#39;</span><span class="p">,</span> 
+             <span class="n">full_url</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns a pandas dataframe with all values for all options </span>
+<span class="sd">    for the table specified by table_id</span>
+<span class="sd">    </span>
+<span class="sd">    Warning: The table may be large</span>
+<span class="sd">    </span>
+<span class="sd">    Useful if </span>
+<span class="sd">        - you know exactly what you are looking for and</span>
+<span class="sd">        - you do not want to use the notebook/widgets/box to specify the json query)</span>
+<span class="sd">    </span>
+<span class="sd">    Example</span>
+<span class="sd">    </span>
+<span class="sd">    df = read_all(table_id = &#39;10714&#39;)</span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+     
+    <span class="k">if</span> <span class="n">full_url</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>        
+        <span class="n">full_url</span> <span class="o">=</span> <span class="s1">&#39;{base_url}/{language}/table/{table_id}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">base_url</span> <span class="o">=</span> <span class="n">base_url</span><span class="p">,</span>
+            <span class="n">language</span> <span class="o">=</span> <span class="n">language</span><span class="p">,</span> 
+            <span class="n">table_id</span> <span class="o">=</span> <span class="n">table_id</span><span class="p">)</span>
+        
+    <span class="n">query</span> <span class="o">=</span> <span class="n">full_json</span><span class="p">(</span><span class="n">full_url</span> <span class="o">=</span> <span class="n">full_url</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">full_url</span><span class="p">,</span> <span class="n">json</span> <span class="o">=</span> <span class="n">query</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">pyjstat</span><span class="o">.</span><span class="n">from_json_stat</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">json</span><span class="p">(</span><span class="n">object_pairs_hook</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">))</span>
+    
+    <span class="c1"># maybe this need not be its own function, </span>
+    <span class="c1"># but an option in read_json? json = &#39;all&#39;</span>
+    
+    <span class="c1"># other functions(options include: read_recent to get only the </span>
+    <span class="c1"># most recent values (defined as x), json = &#39;recent&#39;)</span>
+    
+    <span class="k">return</span> <span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Hans Olav Melberg.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
