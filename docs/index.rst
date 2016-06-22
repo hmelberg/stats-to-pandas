@@ -11,7 +11,7 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-
+.. automodule:: stats_to_pandas
 
 Indices and tables
 ==================
