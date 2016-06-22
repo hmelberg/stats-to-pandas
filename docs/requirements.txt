@@ -1,1 +1,1 @@
-stats_to_python
+stats_to_pandas
