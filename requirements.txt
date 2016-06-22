@@ -1,1 +1,6 @@
+pandas
+requests
+pyjstat
+ipywidgets
+IPython
 stats_to_pandas
