@@ -1,5 +1,6 @@
 # stats-to-pandas
 Download data from statistical agencies to pandas dataframes. 
+[Demo on YouTube](https://www.youtube.com/watch?v=hhj7ITIU3F8)
 
 ##Installation
 
