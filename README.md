@@ -1,17 +1,17 @@
 # stats-to-pandas
-Download data from statistical agencies to pandas dataframes.
+Download data from statistical agencies to pandas dataframes and easily get the json-stat query required to download different types of tables. 
 
 [Demo on YouTube](https://www.youtube.com/watch?v=hhj7ITIU3F8)
 
 ## Installation
 
-pip install stats_to_pandas
+    pip install stats_to_pandas
 
 ## Requirements
-- pandas
-- requests
-- pyjstat
-- Jupyter notebook, IPython, ipywidgets
+    - pandas
+    - requests
+    - pyjstat
+    - Jupyter notebook, IPython, ipywidgets
 
 ## Overview
 
@@ -32,6 +32,9 @@ pip install stats_to_pandas
 
     df = stp.read_box(box)
 
+##### Or just get the json query that specify the data selected in the gui-box 
+
+    query = stp.get_json(box)
 
 ## 4. More
 ##### Read all values for all variables for table with id 10714
