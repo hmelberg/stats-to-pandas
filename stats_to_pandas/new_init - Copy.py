@@ -17,14 +17,8 @@ Functions: General Use
 ----------------------
 :func:`search`
     returns a pandas dataframe with the tables containing a phrase or keyword
-:func:`read_url`
-    reads the table at the specified url using the json-stat format
-:func:`read_with_json`
-    reads the table_id and extracts the information specified in the json dict
-:func:`read_premade`
-    reads the premade table specified by table_id
-:func:`read_premade`
-    reads the premade table specified by table_id 
+:func:`read`
+    returns a pandas dataframe with the data from the specified table
 :func:`get_json`
     return the json-stat query that specifies a data download
 :func:`get_variables`
@@ -35,8 +29,8 @@ Functions: General Use
     
 Functions: Jupyter Notebook
 ---------------------------
-:func:`show`
-    show and select variables and values in widget gui
+:func:`select`
+    select a table to be further specified in a widget gui
 :func:`read(box = box)`
     download the data as specified in the gui box to a pandas dataframe
 """
@@ -45,7 +39,7 @@ __all__ = ["__version__",
            "get_json", "get_variables", "read", "search", "select", "to_dict"]
 
 __title__ = 'stats_to_pandas'
-__version__ = '0.0.8'
+__version__ = '0.0.7'
 __author__ = 'Hans Olav Melberg'
 __license__ = 'MIT'
 

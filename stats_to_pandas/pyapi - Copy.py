@@ -46,7 +46,7 @@ from collections import OrderedDict
 def search(phrase, 
            language = 'en', 
            base_url = 'http://data.ssb.no/api/v0'
-           subset = 'all'):
+           premade = False):
     """
         Search for tables that contain the phrase in Statistics Norway.
         Returns a pandas dataframe with the results.
@@ -78,11 +78,10 @@ def search(phrase,
             default in Statistics Norway: 'http://data.ssb.no/api/v0'
             different defaults can be specified
         
-        subset: string
-            if 'all' (default): searches all talbes
-            if 'premade': searches only among a special subset of premade 
-                tables that do not need further specification to be downloaded
-        
+        premade: boolean
+            if True, searches only among the subset of premade tables
+            if False searches all tables
+            default: False
        
        Returns
        -------
@@ -92,7 +91,7 @@ def search(phrase,
         """
     # search among premade tables (only) if premade parameter is True
     url = 'http://data.ssb.no/api/v0/dataset'    
-    if subset = 'premade':        
+    if premade:        
         url = '{url}?lang={language}'.format(url = url,
                                              language = language)
         df = pd.read_html(url)
@@ -151,6 +150,7 @@ def search(phrase,
 
 def get_variables(
         table_id = None,
+        source = None, 
         language = 'en',
         base_url = 'http://data.ssb.no/api/v0',
         full_url = None):
@@ -160,26 +160,26 @@ def get_variables(
         Each element of the list is a dictionary that provides more 
         information about a variable. 
         
-        For instance, one variable may contain information about for which
-        years information about that variable is available.
+        For instance, one variable may contain information about the
+        different years that are available.
         
         
         Parameters
         ----------
     
-        table_id: string
-            the unique table_id number, a string including leading zeros.
-                            
-        language: string
-            default 'en' (default, English) 
-            optional: 'no' (Norwegian)
-        
-        base_url: string
-            base url locating the table (not including table identifier)
-        
-        full_url: string 
-            The full url to the table.
-            If full_url is specified, other paramaters are ignored.
+            table_id: string
+                the unique table_id number, a string including leading zeros.
+                                
+            language: string
+                default 'en' (default, English) 
+                optional: 'no' (Norwegian)
+            
+            base_url: string
+                base url locating the table (not including table identifier)
+            
+            full_url: string 
+                The full url to the table.
+                If full_url is specified, other paramaters are ignored.
                 
     """
     
@@ -208,7 +208,9 @@ def to_dict(json_str):
     
 
 #%%
-def read_table(table_id = None,
+def read(box = None, 
+         table_id = None,
+         premade = False, 
          language = 'en', 
          query = None, 
          base_url = 'http://data.ssb.no/api/v0/dataset', 
@@ -219,32 +221,42 @@ def read_table(table_id = None,
     
     Parameters
     ----------    
+    box : widget container
+        the name of the widget container that contains the specification
+            of which variables and values to use to create the table
+
+        If box is specified, no other parameter is needed since the widget
+        contains all the information needed to create and download a table.
+    
     table_id : string
         the table_id for the table to be downloaded. 
-    query : dict or string
-        The following arguments can be used in query:
-            - dict
-                a json-stat dictionary specifying what data to download
-            - 'all'
-                downloads all variables and values for the table
-                warning: the table may be very large
-            - 'recent'
-                downloads only the most recent value of all variables 
-            - 'premade : 
-                downloads all values from a premade table
-    url : string
         
-                              
-    Useful if
-    ---------
+        If table_id is given, the user also has to specify one or more 
+        arguments to indicate what variables and values that should be used.
+        The following arguments can be used:
+            - premade : boolean
+                if False (default), read builds a table based on the other 
+                    arguments
+                
+                if True, read downloads the data for table_id from the
+                (limited) set of premade tables that do not need further 
+                specifications.
+            - language                
+        
+        
+        
+        
+        
+    
+    Useful if 
         - you know exactly what you are looking for and
-        - can specify the json yourself 
-        - you do not want to use the notebook/widgets to specify the json query
+        - can specify the json yourself (as a dictionary)
+        - you do not want to use the notebook/widgets/box to specify the json query
         
     Hints
     -----
         - use full_json(table_id = '10714', out = 'string') to get a query string and edit it
-        - use to_dict(str) to transform an edited json string to a dict
+        - use to_dict(str) to get a dict from an edited json string
             
     Example
     -------
@@ -257,17 +269,29 @@ def read_table(table_id = None,
     
     df = read_with_json(table_id = '10714', query = json_query)
     """
-from_json_stat(data.json(object_pairs_hook=OrderedDict))
+    if box:
+        query = get_json(from_box)
+        url = from_box.children[3].value
+        data = requests.post(url, json = query)
+        results = pyjstat.from_json_stat(data.json(object_pairs_hook=OrderedDict))
+        return results[0]
+
+    elif premade:
+        base_url = 'http://data.ssb.no/api/v0/dataset'
+        full_url = '{base_url}/{table_id}.json?lang={language}'.format(
+                                            base_url = base_url,
+                                            table_id = str(table_id), 
+                                            language = language)
+        data = requests.get(full_url)
+        df = pyjstat.from_json_stat(data.json(object_pairs_hook=OrderedDict))
         df = df[0]
        
     elif query:
         if query = 'all':
-            query = get_json(table_id = table_id, 
-                             values = 'all'
-                             out = 'dict', 
-                             language = 'en',
-                             base_url = base_url,
-                             full_url = full_url)
+            query = full_json(table_id = None, 
+                              out = 'dict', 
+                              language = 'en',
+                              full_url = None)
         else:
             full_url = '{base_url}/{language}/table/{table_id}'.format(
                                             base_url = base_url, 
@@ -282,16 +306,6 @@ from_json_stat(data.json(object_pairs_hook=OrderedDict))
         data = requests.get(full_url)
         df = pyjstat.from_json_stat(data.json(object_pairs_hook=OrderedDict))
         df = df[0]
-
-
-    elif premade:
-        base_url = 'http://data.ssb.no/api/v0/dataset'
-        full_url = '{base_url}/{table_id}.json?lang={language}'.format(
-                                            base_url = base_url,
-                                            table_id = str(table_id), 
-                                            language = language)
-        data = requests.get(full_url)
-        df = pyjstat.
             
     return df
 
@@ -304,7 +318,7 @@ def get_json(box = None,
              full_url = None):
         
     """
-    Returns a json query used to select variables and values.
+    Returns a json query used to selects variables and values.
     
   
     Parameters
@@ -329,6 +343,8 @@ def get_json(box = None,
           'box' (default): the variables and values selected in the widget box
           'all' : all values for all variables
           'recent' : only the most recent value for all variables
+          'first n'
+          'last n'
              
     If box is specified, no table_id need to be specified (and will be ignored)
     
@@ -345,8 +361,7 @@ def get_json(box = None,
     Note
     ----
     
-    The function is useful 
-        - to get the json associated with the selection in a widget box
+    The function is useful if
         - you do not want to use the widget gui/notebook to build the query
         - but want a starting point to revise and specify a query 
     
@@ -366,9 +381,7 @@ def get_json(box = None,
         
      
     elif values = 'all':
-        variables = get_variables(table_id, 
-                                  language = language, 
-                                  full_url = full_url)
+        variables = get_variables(table_id, language = language, full_url = full_url)
         nvars = len(variables)
         
     # todo: add other options 'recent' (i.e. top) etc

@@ -14,15 +14,10 @@ import requests
 import ast
 from pyjstat import pyjstat
 from collections import OrderedDict
-try:
-    from ipywidgets import widgets
-    from IPython.display import display
-except:
-    print('''ipywidgets was not found on this computer. You can still use
-    stats_to_pandas, except for  two commands, select() and read_box(), that
-    require ipywidgets and only works in a Jupyter notebook environment.'''
-    
+from ipywidgets import widgets
+from IPython.display import display
 # todo: consider using jsonstat instead of pyjstat
+
 
 def select(table_id = None, 
            language = 'en', 
@@ -31,13 +26,13 @@ def select(table_id = None,
     """
     Selects a table based on the table_id and returns a widget container 
     in which the user can select the set of variables and values to be 
-    included in the final table. The container can be displayed in a Jupyter 
-    notebook.
-
+    included in the final table.
+    
+    
     Example
-    -------
+    --------
     box = select(table_id = '10714')
-    box
+    
     
     Parameters
     ----------    
@@ -57,7 +52,7 @@ def select(table_id = None,
         full_url: string
             the full url to the table
     """
-    print('Depreciation warning: Select is depreciated and will eliminated. Use: show_table() instead.')    
+        
     # get table_id not full url was specified 
     if full_url is None:
         full_url = '{base_url}/{language}/table/{table_id}'.format(
@@ -120,20 +115,8 @@ def select(table_id = None,
     return selection_container
 
 
-def read_box(from_box):
-    """
-    Takes a widget container as input (where the user has selected varables) 
-    and returns a pandas dataframe with the values for the selected variables.
-    
-    Example
-    -------
-    
-    df = read_box(box)
-    
-    """
-    query = get_json(from_box)
-    url = from_box.children[3].value
-    data = requests.post(url, json = query)
-    results = pyjstat.from_json_stat(data.json(object_pairs_hook=OrderedDict))
-    return results[0]
+
+
+
+
 

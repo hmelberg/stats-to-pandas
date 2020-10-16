@@ -161,9 +161,7 @@ def get_variables(
     
     if full_url is None:
           full_url = '{base_url}/{language}/table/{table_id}'.format(
-            base_url = base_url, 
-            language = language, 
-            table_id = table_id)
+            base_url = base_url, language = language, table_id = table_id)
     
     df = pd.read_json(full_url)
     variables = [dict(values) for values in df.iloc[:,1]]
@@ -186,7 +184,7 @@ def select(table_id = None,
     Example
     --------
     box = select(table_id = '10714')
-    box
+    
     
     Parameters
     ----------    
@@ -201,7 +199,7 @@ def select(table_id = None,
             language for table
         
         base_url: string.
-            url locating the table (not including table_id)
+            base url locating the table (not including table_id)
         
         full_url: string
             the full url to the table
@@ -386,8 +384,7 @@ def read_with_json(table_id = None,
         
     Hints
     -----
-        - use json_all() to get a query string and edit it
-        Example: query = json_all(table_id = '10714', out = 'string') 
+        - use full_json(table_id = '10714', out = 'string') to get a query string and edit it
         - use to_dict(str) to get a dict from an edited json string
             
     Example
@@ -524,7 +521,7 @@ def read_premade(premade_id = None,
 
 #%%
 
-def json_all(table_id = None, 
+def full_json(table_id = None, 
               out = 'dict', 
               language = 'en', 
               full_url = None):
@@ -545,7 +542,7 @@ def json_all(table_id = None,
     Example
     -------
     
-    query = json_all(table_id = '10714', out = 'string')
+    query = full_json(table_id = '10714', out = 'string')
     
     """
     
@@ -600,7 +597,7 @@ def read_all(table_id = None,
             language = language, 
             table_id = table_id)
         
-    query = json_all(full_url = full_url)
+    query = full_json(full_url = full_url)
     data = requests.post(full_url, json = query)
     results = pyjstat.from_json_stat(data.json(object_pairs_hook=OrderedDict))
     
